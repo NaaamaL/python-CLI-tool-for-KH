@@ -20,8 +20,7 @@ def process(organization, username):
     username = username
     org_name = organization
 
-    org_url = ("https://api.github.com/orgs/%s/repos?simple=yes&per_page=100&page=1"
-               % org_name)
+    org_url = ("https://api.github.com/orgs/%s/repos?simple=yes&per_page=100&page=1" % org_name)
     org_data = []
 
     res = requests.get(org_url, auth=(username, git_token))
@@ -39,9 +38,7 @@ def process(organization, username):
         branches_num = len(branches)
         org_data.append([repo_name, branches_num])
 
-    table = tabulate(org_data,
-                     headers=["Repo Name", "Number Of Branches"],
-                     tablefmt="orgtbl")
+    table = tabulate(org_data, headers=["Repo Name", "Number Of Branches"], tablefmt="orgtbl")
     print("\n gitHub organization %s data: \n" % org_name)
     print(table)
 
