@@ -1,90 +1,50 @@
-"""
-The ``jsonschema`` command line.
-"""
-from __future__ import absolute_import
-import argparse
-import json
-import sys
-
-from jsonschema import __version__
-from jsonschema._reflect import namedAny
-from jsonschema.validators import validator_for
+import requests
+import getpass
+import click
+from tabulate import tabulate
 
 
-def _namedAnyWithDefault(name):
-    if "." not in name:
-        name = "jsonschema." + name
-    return namedAny(name)
+@click.command()
+@click.option("-o", "--organization", required=True,
+              help="Name of the organization you want to inspect")
+@click.option("-u", "--username", required=True,
+              help="Username of your gitHub account")
+def process(organization, username):
+    """ This tool gets gitHub account username,
+        Name of gitHub organization,
+        and gitHub access token,
+        And Prints the names of the repos in the organization
+        and the number of branched in each of them.
+    """
+    git_token = getpass.getpass("Enter gitHub token for organization: ")
+    username = username
+    org_name = organization
+
+    org_url = ("https://api.github.com/orgs/%s/repos?simple=yes&per_page=100&page=1"
+               % org_name)
+    org_data = []
+
+    res = requests.get(org_url, auth=(username, git_token))
+    repos = res.json()
+
+    while 'next' in res.links.keys():
+        res = requests.get(res.links['next']['url'], auth=(username, git_token))
+        repos.extend(res.json())
+
+    for repo in repos:
+        repo_name = repo["name"]
+        branches_url = repo["branches_url"].split("{/branch}")[0]
+        res = requests.get(branches_url, auth=(username, git_token))
+        branches = res.json()
+        branches_num = len(branches)
+        org_data.append([repo_name, branches_num])
+
+    table = tabulate(org_data,
+                     headers=["Repo Name", "Number Of Branches"],
+                     tablefmt="orgtbl")
+    print("\n gitHub organization %s data: \n" % org_name)
+    print(table)
 
 
-def _json_file(path):
-    with open(path) as file:
-        return json.load(file)
-
-
-parser = argparse.ArgumentParser(
-    description="JSON Schema Validation CLI",
-)
-parser.add_argument(
-    "-i", "--instance",
-    action="append",
-    dest="instances",
-    type=_json_file,
-    help=(
-        "a path to a JSON instance (i.e. filename.json) "
-        "to validate (may be specified multiple times)"
-    ),
-)
-parser.add_argument(
-    "-F", "--error-format",
-    default="{error.instance}: {error.message}\n",
-    help=(
-        "the format to use for each error output message, specified in "
-        "a form suitable for passing to str.format, which will be called "
-        "with 'error' for each error"
-    ),
-)
-parser.add_argument(
-    "-V", "--validator",
-    type=_namedAnyWithDefault,
-    help=(
-        "the fully qualified object name of a validator to use, or, for "
-        "validators that are registered with jsonschema, simply the name "
-        "of the class."
-    ),
-)
-parser.add_argument(
-    "--version",
-    action="version",
-    version=__version__,
-)
-parser.add_argument(
-    "schema",
-    help="the JSON Schema to validate with (i.e. schema.json)",
-    type=_json_file,
-)
-
-
-def parse_args(args):
-    arguments = vars(parser.parse_args(args=args or ["--help"]))
-    if arguments["validator"] is None:
-        arguments["validator"] = validator_for(arguments["schema"])
-    return arguments
-
-
-def main(args=sys.argv[1:]):
-    sys.exit(run(arguments=parse_args(args=args)))
-
-
-def run(arguments, stdout=sys.stdout, stderr=sys.stderr):
-    error_format = arguments["error_format"]
-    validator = arguments["validator"](schema=arguments["schema"])
-
-    validator.check_schema(arguments["schema"])
-
-    errored = False
-    for instance in arguments["instances"] or ():
-        for error in validator.iter_errors(instance):
-            stderr.write(error_format.format(error=error))
-            errored = True
-    return errored
+if __name__ == "__main__":
+    process()
