@@ -1,2 +1,2 @@
 # python_script
-Python script for KH
+Python CLI tool to inspect gitHub organization.
